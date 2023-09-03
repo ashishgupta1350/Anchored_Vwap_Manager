@@ -8,6 +8,7 @@ import yfinance as yf
 import pandas_ta as ta
 import matplotlib.pyplot as plt
 import mplfinance as mpf
+from datetime import timedelta
 
 cur_path = "C:\\Users\\ashis\\OneDrive\\Desktop\\Anchored_Vwap_Code\\"
 
@@ -31,20 +32,6 @@ def num_days_in_dataframe(df):
     # Extract the number of days from the difference
     number_of_days = date_difference.days
     return number_of_days
-
-
-def get_multiple_anchors_from_dataframe(df):
-    # Find the highest value in the 'high' column
-    df['High'] = pd.to_numeric(df['High'], errors='coerce')
-    highest_high = df['High'].max()
-
-    # Find the index (row) where the highest value occurs
-    index_of_highest_high = df['High'].idxmax()
-    #     print(f"The highest value in the 'high' column is: {highest_high}")
-    #     print(f"The index of the highest value is: {index_of_highest_high}")
-
-    return highest_high, index_of_highest_high
-
 
 
 def get_anchors_from_dataframe(df):
@@ -90,40 +77,37 @@ def convert_index_to_datetime(df):
     return df
 
 
-import pandas as pd
-import numpy as np
+def get_n_days_data_from_dataframe(df, days):
+    n = days
+    end_date = df["parsed_date"].max()
+    start_date = end_date - timedelta(days=n)
+    n_days_data = df[df['parsed_date'] >= start_date]
+    return n_days_data
 
-def get_anchors_from_dataframe(df, threshold=0.05, num_anchors=3):
-    """
-    Find the most dominant anchor points based on local maxima in the 'High' column.
 
-    Parameters:
-    - df: DataFrame containing OHLCV data.
-    - threshold: Minimum difference required between a local maxima and its neighbors.
-    - num_anchors: Number of dominant anchors to find.
+def get_multiple_anchors_from_dataframe(train_data):
+    num_days = num_days_in_dataframe(train_data)
+    if num_days < 9:
+        a, b = get_anchors_from_dataframe(train_data)
+        return [a, b]
+    elif 9 <= num_days <= 17:
+        global_anchor, global_anchor_timeframe = get_anchors_from_dataframe(train_data)
 
-    Returns:
-    - List of anchor values and their corresponding indices.
-    """
-    df['High'] = pd.to_numeric(df['High'], errors='coerce')
-    high_values = df['High'].values
-    anchor_values = []
-    anchor_indices = []
+        seven_days_data = get_n_days_data_from_dataframe(train_data, 7)
+        seven_day_anchor, seven_day_anchor_timeframe = get_anchors_from_dataframe(seven_days_data)
+        return [[global_anchor, global_anchor_timeframe], [seven_day_anchor, seven_day_anchor_timeframe]]
+    elif num_days >= 17:
+        global_anchor, global_anchor_timeframe = get_anchors_from_dataframe(train_data)
+        seven_days_data = get_n_days_data_from_dataframe(train_data, 7)
+        seven_day_anchor, seven_day_anchor_timeframe = get_anchors_from_dataframe(seven_days_data)
+        two_weeks_data = get_n_days_data_from_dataframe(train_data, 14)
+        two_weeks_data_anchor, two_weeks_data_anchor_timeframe = get_anchors_from_dataframe(two_weeks_data)
+        return [[global_anchor, global_anchor_timeframe], [two_weeks_data_anchor, two_weeks_data_anchor_timeframe],
+                [seven_day_anchor, seven_day_anchor_timeframe]]
+    else:
+        return None
 
-    for i in range(1, len(high_values) - 1):
-        if high_values[i] > high_values[i - 1] and high_values[i] > high_values[i + 1]:
-            # Check if the difference between the local maxima and its neighbors is above the threshold
-            if high_values[i] - max(high_values[i - 1], high_values[i + 1]) > threshold:
-                anchor_values.append(high_values[i])
-                anchor_indices.append(i)
 
-    # Sort anchor values in descending order and keep the top num_anchors
-    sorted_anchors = sorted(zip(anchor_values, anchor_indices), reverse=True)[:num_anchors]
-
-    # Extract the sorted anchor values and indices
-    anchor_values, anchor_indices = zip(*sorted_anchors)
-
-    return anchor_values, anchor_indices
 def test_temp():
     df = fetch_data()
 
@@ -139,14 +123,9 @@ def test_temp():
     train_data['Close'] = train_data['Close'].astype(float)
     train_data['Volume'] = train_data['Volume'].astype(int)  # If Volume is expected to be an integer
 
-
-
-    # Get the three most dominant anchors based on local maxima in the training data
-    anchor_values, anchor_indices = get_anchors_from_dataframe(train_data, num_anchors=3)
-
-    # Print the anchor values and their corresponding indices
-    for anchor_value, anchor_index in zip(anchor_values, anchor_indices):
-        print(f"Anchor Value: {anchor_value}, Index: {anchor_index}")
+    output = get_multiple_anchors_from_dataframe(train_data)
+    print(num_days_in_dataframe(train_data))
+    print(output)
 
 
 def backtest_actual():
@@ -317,7 +296,8 @@ def backtest():
 
 
 def strategy_main():
-    backtest_actual()
+    #     backtest_actual()
+    test_temp()
 
 
 if __name__ == '__main__':
