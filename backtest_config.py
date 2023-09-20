@@ -18,47 +18,11 @@ import matplotlib.pyplot as plt
 import datetime as dt
 
 
-# def convert_to_iso8601(date_string):
-#     try:
-#         # Assuming the input date_string is in the format "YYYY-MM-DD HH:MM:SS"
-#         # You can adjust the format if your input is different
-#         dt = datetime.strptime(date_string, "%Y-%m-%d %H:%M:%S")
-
-#         # Convert to ISO 8601 format
-#         iso8601_date = dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
-
-#         return iso8601_date
-#     except ValueError:
-#         return None
-
-# def plot_data(option_data):
-#     data = option_data.copy()
-#     data = data[:]
-
-#     data['close'] = data['close'].astype(float)
-#     # Assuming 'put_data' is your DataFrame
-#     data['datetime'] = pd.to_datetime(data['datetime'])  # Convert 'datetime' column to datetime type if it's not already
-
-#     put_data1 = data.copy()
-#     put_data1['datetime'] = data['datetime'].apply(lambda x: x.strftime('%Y-%m-%d %H:%M'))
-
-#     # Create a line plot
-#     plt.figure(figsize=(12, 6))  # Set the figure size
-#     plt.plot(put_data1['datetime'], put_data1['close'], marker='o', linestyle='-')
-#     plt.title('Close Price Over Time')
-#     plt.xlabel('Datetime')
-#     plt.ylabel('Close Price')
-#     plt.grid(True)
-#     plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
-
-#     plt.tight_layout()
-#     plt.show()
-
-
 def autologin():
     curdate = datetime.now().strftime("%d-%m-%Y")
-    # token_filename = 'token_' + curdate + '.txt'
     token_filename = r'C:\Users\ashis\OneDrive\Desktop\Anchored_Vwap_Code\login_details\token_' + curdate + '.txt'
+    # token_filename = 'token_' + curdate + '.txt'
+
     # check if token_filename exists and is not empty
     try:
         with open(token_filename, 'r') as f:
@@ -112,15 +76,6 @@ def autologin():
     return breeze
 
 
-# Assume you have logged in using breeze-connect
-breeze = autologin()
-
-# Defining global variables
-time_frame_options_data = '5minute'  # 5minute, 1minute, 30minute, 1day is allowed by icici
-
-
-# product_type can be "futures" , "options",
-
 def num_days_in_dataframe(df):
     # Convert the date strings to datetime objects
     start_date_str = str(df['datetime'].iloc[0])
@@ -152,6 +107,7 @@ def get_n_days_data_from_dataframe(df, days):
     df_copy = df.copy()
     df_copy['datetime'] = pd.to_datetime(df_copy['datetime'])
     n = days
+
     end_date = df_copy["datetime"].max()
     start_date = end_date - timedelta(days=n)
     n_days_data = df_copy[df_copy['datetime'] >= start_date]
@@ -159,6 +115,12 @@ def get_n_days_data_from_dataframe(df, days):
 
 
 def get_multiple_anchors_from_dataframe(train_data, expiry_type="monthly"):
+    """
+    Gets multiple anchors from a dataframe
+    :param train_data:  Dataframe with datetime and high columns
+    :param expiry_type:
+    :return:
+    """
     if expiry_type == "monthly":
         smallest_anchor_days = 25
         mid_anchor_days = 45
@@ -186,11 +148,107 @@ def get_multiple_anchors_from_dataframe(train_data, expiry_type="monthly"):
         two_weeks_data_anchor, two_weeks_data_anchor_timeframe = get_anchors_from_dataframe(two_weeks_data)
         return [[global_anchor, global_anchor_timeframe], [two_weeks_data_anchor, two_weeks_data_anchor_timeframe],
                 [seven_day_anchor, seven_day_anchor_timeframe]]
+
     else:
         return None
 
 
-def get_historical_data_for_option(strike_price, option_type, from_date, to_date, expiry_date, time_interval,
+#
+
+# ICICI returns at max 1000 candles for data at a time, to get more than 1000 candles, we need to make multiple requests
+def get_stock_fut_index_data_helper(breeze, from_date, to_date, time_interval, stock_code="NIFTY", exchange_code="NSE",
+                                  product_type="cash"):
+    """
+
+        :param breeze: BreezeConnect object
+        :param from_date: Ex: "2023-04-19 12:34:56"
+        :param to_date: Ex : "2023-09-06 12:34:56"
+        :param time_interval: Ex "5minute" , "1minute" , "30minute" , "1day"
+        :param stock_code: "NIFTY" , "BANKNIFTY" ETC
+        :param exchange_code: "NSE" , "BSE" ETC
+        :param product_type: "options"
+        :return: Historical data for a stock / future/ index, expiry date as : pd.DataFrame(response['Success'])
+        """
+    #     from_date = "2023-04-19 12:34:56"
+    #     to_date = "2023-09-06 12:34:56"
+    #     time_interval = "5minute"
+    #     product_type="cash"
+    #     stock_code="NIFTY"
+    #     exchange_code = "NSE"
+    #     print()
+    #     print("STOCK DATA in getHistoricalData: ")
+    #     print(f"From Date: {from_date}")
+    #     print(f"To Date: {to_date}")
+    #     print(f"Time Interval: {time_interval}")
+    #     print(f"Product Type: {product_type}")
+    #     print(f"Stock Code: {stock_code}")
+    #     print(f"Exchange Code: {exchange_code}")
+    #     print()
+
+    from_date_converted = convert_to_iso8601(from_date)
+    to_date_converted = convert_to_iso8601(to_date)
+
+    response = None
+    try:
+        response = breeze.get_historical_data_v2(interval=time_interval,
+                                                 from_date=str(from_date_converted),
+                                                 to_date=str(to_date_converted),
+                                                 stock_code=stock_code,
+                                                 exchange_code=exchange_code,
+                                                 product_type=product_type)
+    except Exception as e:
+        time.sleep(1)
+        try:
+            response = breeze.get_historical_data_v2(interval=time_interval,
+                                                     from_date=str(from_date_converted),
+                                                     to_date=str(to_date_converted),
+                                                     stock_code=stock_code,
+                                                     exchange_code=exchange_code,
+                                                     product_type=product_type)
+        except Exception as e:
+            print("breeze.get_historical_data_v2 did not respond. Probably api isn't working properly. Check ASAP!")
+            return []
+    if response['Success'] == []:
+        print(f"Error recieving data for stock: {stock_code}")
+        print("More information: ")
+        # from_date = "2023-04-19 12:34:56"
+        # to_date = "2023-09-06 12:34:56"
+        # time_interval = "5minute"
+        # product_type = "cash"
+        # stock_code = "NIFTY"
+        # exchange_code = "NSE"
+        print()
+        print("STOCK DATA in getHistoricalData: ")
+        print(f"From Date: {from_date}")
+        print(f"To Date: {to_date}")
+        print(f"Time Interval: {time_interval}")
+        print(f"Product Type: {product_type}")
+        print(f"Stock Code: {stock_code}")
+        print(f"Exchange Code: {exchange_code}")
+        print()
+        print("Returning [] for response!")
+        return response['Success']
+    return response['Success']
+
+def get_historical_data_for_stock_fut_index(breeze, from_date, to_date, time_interval, stock_code="NIFTY", exchange_code="NSE",
+                                  product_type="cash"):
+
+    data = get_stock_fut_index_data_helper(breeze, from_date, to_date, time_interval, stock_code, exchange_code, product_type)
+    if len(data) < 1000:
+        return data
+    else:
+        while True:
+            to_date_new = data[0]['datetime']
+            from_date = from_date
+            time.sleep(1)
+            data_new = get_stock_fut_index_data_helper(breeze, from_date, to_date_new, time_interval, stock_code, exchange_code, product_type)
+            # data = data_new - the last point of data_new + data
+            data = data_new[:-1] + data
+            if len(data_new) < 1000:
+                return data
+
+
+def get_historical_data_for_option_helper(breeze, strike_price, option_type, from_date, to_date, expiry_date, time_interval,
                                    stock_code="NIFTY", exchange_code="NFO", product_type="options"):
     """
 
@@ -227,6 +285,134 @@ def get_historical_data_for_option(strike_price, option_type, from_date, to_date
     #     print(f"Option Type: {option_type}")
     #     print()
 
+    from_date_converted = convert_to_iso8601(from_date)
+    to_date_converted = convert_to_iso8601(to_date)
+    expiry_date_converted = convert_to_iso8601(expiry_date)
+
+    response = None
+    try:
+        response = breeze.get_historical_data_v2(interval=time_interval,
+                                                 from_date=str(from_date_converted),
+                                                 to_date=str(to_date_converted),
+                                                 stock_code=stock_code,
+                                                 exchange_code=exchange_code,
+                                                 product_type=product_type,
+                                                 expiry_date=str(expiry_date_converted),
+                                                 right=option_type,
+                                                 strike_price=str(strike_price))
+    except Exception as e:
+        time.sleep(1)
+        try:
+            response = breeze.get_historical_data_v2(interval=time_interval,
+                                                     from_date=str(from_date_converted),
+                                                     to_date=str(to_date_converted),
+                                                     stock_code=stock_code,
+                                                     exchange_code=exchange_code,
+                                                     product_type=product_type,
+                                                     expiry_date=str(expiry_date_converted),
+                                                     right=option_type,
+                                                     strike_price=str(strike_price))
+        except Exception as e:
+            print("breeze.get_historical_data_v2 did not respond. Probably api isn't working properly. Check ASAP!")
+            return []
+    if response['Success'] == []:
+        print(f"Error recieving data for strike: {strike_price} for expiry: {expiry_date}")
+        print("More information: ")
+        print(f"From Date: {from_date}")
+        print(f"To Date: {to_date}")
+        print(f"Expiry Date: {expiry_date}")
+        print(f"Time Interval: {time_interval}")
+        print(f"Product Type: {product_type}")
+        print(f"Stock Code: {stock_code}")
+        print(f"Exchange Code: {exchange_code}")
+        print(f"Strike Price: {strike_price}")
+        print(f"Option Type: {option_type}")
+        print()
+        print("Returning [] for response!")
+        return response['Success']
+
+    return response['Success']
+
+
+def get_historical_data_for_option(breeze, strike_price, option_type, from_date, to_date, expiry_date, time_interval,
+                                   stock_code="NIFTY", exchange_code="NFO", product_type="options"):
+    """
+
+    :param strike_price: INT : Example: 19500
+    :param option_type: Striing : Example: "call"
+    :param from_date: Ex: "2023-04-19 12:34:56"
+    :param to_date: Ex : "2023-09-06 12:34:56"
+    :param expiry_date: Ex :"2023-09-14 00:00:00"
+    :param time_interval: Ex "5minute" , "1minute" , "30minute" , "1day"
+    :param stock_code: "NIFTY" , "BANKNIFTY" ETC
+    :param exchange_code: "NSE" , "BSE" ETC
+    :param product_type: "options"
+    :return: Historical data for option with given strike price, expiry date as : pd.DataFrame(response['Success'])
+    """
+    if from_date == "auto":
+        from_date = "1990-08-01 12:34:56"
+    if to_date == "auto":
+        to_date = "2100-09-06 12:34:56"
+
+    data = get_historical_data_for_option_helper(breeze, strike_price, option_type, from_date, to_date, expiry_date, time_interval,
+                                   stock_code, exchange_code, product_type)
+    if len(data) < 1000:
+        return pd.DataFrame(data)
+
+    else:
+        while True:
+            to_date_new = data[0]['datetime']
+            from_date = from_date
+            time.sleep(1)
+            data_new = get_historical_data_for_option_helper(breeze, strike_price, option_type, from_date, to_date_new, expiry_date, time_interval,
+                                   stock_code, exchange_code, product_type)
+            # data = data_new - the last point of data_new + data
+            data = data_new[:-1] + data
+            if len(data_new) < 1000:
+                return pd.DataFrame(data)
+
+
+def get_complete_historical_data_for_option(breeze, strike_price, option_type, expiry_date, time_interval,
+                                   stock_code="NIFTY", exchange_code="NFO", product_type="options"):
+    """
+    Gets total historical data for option automatically without inputing from and to date
+    :param strike_price: INT : Example: 19500
+    :param option_type: Striing : Example: "call"
+    :param from_date: Ex: "2023-04-19 12:34:56"
+    :param to_date: Ex : "2023-09-06 12:34:56"
+    :param expiry_date: Ex :"2023-09-14 00:00:00"
+    :param time_interval: Ex "5minute" , "1minute" , "30minute" , "1day"
+    :param stock_code: "NIFTY" , "BANKNIFTY" ETC
+    :param exchange_code: "NSE" , "BSE" ETC
+    :param product_type: "options"
+    :return: Historical data for option with given strike price, expiry date as : pd.DataFrame(response['Success'])
+    """
+    #     from_date = "2023-04-19 12:34:56"
+    #     to_date = "2023-09-06 12:34:56"
+    #     expiry_date = "2023-09-14 00:00:00"
+    #     time_interval = "5minute"
+    #     product_type="options"
+    #     stock_code="NIFTY"
+    #     exchange_code = "NFO"
+    #     strike_price = 19500
+    #     option_type = "call"
+    #     print()
+    #     print("OPTION DATA in getHistoricalData: ")
+    #     print(f"From Date: {from_date}")
+    #     print(f"To Date: {to_date}")
+    #     print(f"Expiry Date: {expiry_date}")
+    #     print(f"Time Interval: {time_interval}")
+    #     print(f"Product Type: {product_type}")
+    #     print(f"Stock Code: {stock_code}")
+    #     print(f"Exchange Code: {exchange_code}")
+    #     print(f"Strike Price: {strike_price}")
+    #     print(f"Option Type: {option_type}")
+    #     print()
+    # from_date = "2023-04-19 12:34:56"
+    # to_date = "2023-09-06 12:34:56"
+    # super far from and to dates to get all the data for every option
+    from_date = "1990-08-01 12:34:56"
+    to_date = "2100-09-06 12:34:56"
     from_date_converted = convert_to_iso8601(from_date)
     to_date_converted = convert_to_iso8601(to_date)
     expiry_date_converted = convert_to_iso8601(expiry_date)
@@ -372,6 +558,60 @@ def plot_ohlc_v2(ohlcv_option_data):
 
 #     return next_thursday, month_end_thursday
 
+
+def get_expiry_date_for_candle(expiry_name, expiry_type, day, month, year):
+    """
+    Given a day, month, and year, this function returns the next expiry date for the given expiry_name and expiry_type
+
+    :param expiry_name: "nifty" , "sensex" , "banknifty" , "midcap" , "finnifty"
+    :param expiry_type: "weekly" , "monthly"
+    :param day: 1-31
+    :param month: 1-12
+    :param year: any year (int)
+    :return: Returns the next expiry date for the given expiry_name, expiry_type, day, month, and year
+    """
+    # Define a dictionary to map expiry names to their respective weekday
+    expiry_day_mapping = {
+        "nifty": 3,  # Thursday
+        "sensex": 4,  # Friday
+        "banknifty": 2,  # Wednesday
+        "midcap": 0,  # Monday
+        "finnifty": 1  # Tuesday
+    }
+
+    # Determine the day of the week for the specified expiry_name
+    if expiry_name in expiry_day_mapping:
+        expiry_day = expiry_day_mapping[expiry_name]
+    else:
+        raise ValueError("Invalid expiry_name")
+
+    # Create a datetime object for the specified day, month, and year
+    specified_date = dt.datetime(year, month, day)
+
+    if expiry_type == "weekly":
+        # Calculate the number of days to add for weekly expiry
+        days_until_expiry = (expiry_day - specified_date.weekday() + 7) % 7
+
+        # Calculate the expiry date by adding the days_until_expiry to the specified date
+        expiry_date = specified_date + dt.timedelta(days=days_until_expiry)
+    elif expiry_type == "monthly":
+        # Calculate the last day of the month for the specified month and year
+        last_day_of_month = dt.datetime(year, month, 1) + dt.timedelta(days=31)
+        while last_day_of_month.month != month:
+            last_day_of_month -= dt.timedelta(days=1)
+
+        # Find the last weekday (Monday to Friday) of the month
+        while last_day_of_month.weekday() != expiry_day:
+            last_day_of_month -= dt.timedelta(days=1)
+
+        expiry_date = last_day_of_month
+    else:
+        raise ValueError("Invalid expiry_type")
+
+
+    return expiry_date
+
+
 def get_expiry_date_v2():
     """
 
@@ -441,15 +681,6 @@ def get_from_date_to_date():
     return from_date, to_date
 
 
-def get_nearest_strike(nifty_ltp):
-    """
-
-    :param nifty_ltp: Nifty LTP to get the nearest strike (19223 -> 19200)
-    :return: nearest strike to the nifty_ltp
-    """
-    return int(round(nifty_ltp / 50.0)) * 50
-
-
 def get_nearest_strike_v2(symbol_ltp, difference_between_strikes = 50):
     """
     Generic function to get the nearest strike to the symbol_ltp
@@ -479,7 +710,7 @@ def get_strikes_away_v2(nearest_strike):
     :return: returns 3 strikes in the multiple of 100 (18800 -> [19200, 19300, 19400]) (2.25% away from LTP , +100 , +200)
     """
     nearest_strike = int(nearest_strike)  # Ensure nearest_strike is an integer
-    percent_away = 0.0225  # 2.25%
+    percent_away = 0.0075  # 0.75% away
     first_strike = nearest_strike + int(nearest_strike * percent_away)
     first_strike = (first_strike // 100) * 100  # Round down to the nearest multiple of 100
     second_strike = first_strike + 100
@@ -487,9 +718,10 @@ def get_strikes_away_v2(nearest_strike):
     return [first_strike, second_strike, third_strike]
 
 
-def create_position_files_with_anchors(strike, anchors):
+def create_position_files_with_anchors(strike, anchors, backtesting = False):
     """
 
+    :param backtesting: False or True
     :param strike: INT : Example: 19500
     :param anchors: Array of Anchors tuples : Example: [(235, "2023-09-06 12:34:56"), (123, "2023-08-12 10:55:03")]
     :return:
@@ -497,6 +729,10 @@ def create_position_files_with_anchors(strike, anchors):
     # print(f"anchoors are : {anchors}")
     filename_dictionary = {}
     orders_folder = "orders"
+
+    if backtesting:
+        orders_folder = "backtesting_orders"
+
     today_folder = datetime.now().strftime("%m-%d-%Y")
     if not os.path.exists(orders_folder):
         os.mkdir(orders_folder)
@@ -568,7 +804,8 @@ def get_ltp_icici(breeze, stock_code, exchange_code="NSE", product_type="cash", 
     return current_nifty_ltp
 
 
-def get_options_ltp_icici(strike_price, expiry_date, stock_code='NIFTY', exchange_code='NFO', product_type='options',
+def get_options_ltp_icici(breeze, strike_price, expiry_date, stock_code='NIFTY', exchange_code='NFO',
+                          product_type='options',
                           right='call'):
     """
 
@@ -612,7 +849,8 @@ def get_options_ltp_icici(strike_price, expiry_date, stock_code='NIFTY', exchang
 
 
 # Tries 5 times to get options ltp before returning none
-def get_options_ltp_icici_v2(strike_price, expiry_date, stock_code='NIFTY', exchange_code='NFO', product_type='options',
+def get_options_ltp_icici_v2(breeze, strike_price, expiry_date, stock_code='NIFTY', exchange_code='NFO',
+                             product_type='options',
                              right='call'):
     """
     Tries 5 times to get option LTP from ICICI before returning as None. Sometimes ICICi API doesn't respond properly.
@@ -652,7 +890,6 @@ def get_options_ltp_icici_v2(strike_price, expiry_date, stock_code='NIFTY', exch
     return options_ltp
 
 
-
 def print_signal(strike, price_executed, buy_or_sell, time_interval):
     """
     Prints signal in a certain format (Way to clean code a bit)
@@ -678,287 +915,3 @@ def print_signal(strike, price_executed, buy_or_sell, time_interval):
     print(f"Strike price: {strike}")
     print(f"Charting Timeframe: {time_interval}")
     return
-
-
-stock_code = "NIFTY"
-exchange_code = "NSE"
-product_type = "cash"
-right = "others"
-
-# Get LTP for nifty
-current_nifty_ltp = get_ltp_icici(breeze, stock_code, exchange_code, product_type, right)
-
-# Calculate nearest strike for Nifty
-nearest_strike = get_nearest_strike(current_nifty_ltp)
-
-# Calculate strikes away in positive direction
-strikes_away = get_strikes_away_v2(nearest_strike)
-
-# Create position files for each strike
-# create_position_files(strikes_away)
-#
-# Code variables (these stay kindof safe for entire execution of code)
-
-time_interval = "30minute"
-stock_code = "NIFTY"
-exchange_code = "NSE"
-product_type_nifty = "cash"
-
-time_interval_options = "30minute"
-stock_code_options = "NIFTY"
-exchange_code_options = "NFO"
-product_type_options = "options"
-
-profit_threshold = 15
-loss_threshold = 5
-
-# calculate expiry date
-weekly_expiry_date, monthly_expiry_date = get_expiry_date_v2()
-
-formatted_weekly_expiry_date = weekly_expiry_date.strftime("%Y-%m-%d %H:%M:%S")
-formatted_monthly_expiry_date = monthly_expiry_date.strftime("%Y-%m-%d %H:%M:%S")
-
-# Expiry type for trading anchored vwap strategy
-expiry_type = "monthly"  # "weekly" or "monthly"
-expiry_to_use = expiry_type
-
-booked_profit = 0
-last_booked_profit_for_strike = ""
-# Monitor positions for each strike until 3:00 pm
-while pd.Timestamp.now().hour < 15 or True:
-    print("______________________________________________________________________________________________")
-    print()
-    total_profit = 0
-    active_positions = []
-
-    for i in range(len(strikes_away)):
-        strike = strikes_away[i]
-        print(f"___________________________Working on Strike : {strike}_______________________________")
-
-        #         filename = os.path.join("orders", datetime.now().strftime("%m-%d-%Y"), f"{strike}.txt")
-        #         with open(filename) as f:
-        #             orders = f.readlines()
-
-        ############# Get Historical Data from icici_direct ###################
-        option_type = "call"
-        from_date, to_date = get_from_date_to_date()
-        #         weekly_expiry_date, monthly_expiry_date = get_expiry_date_next_to_next_thursday()
-        #         formatted_weekly_expiry_date = weekly_expiry_date.strftime("%Y-%m-%d %H:%M:%S")
-        #         formatted_monthly_expiry_date = monthly_expiry_date.strftime("%Y-%m-%d %H:%M:%S")
-
-        #         from_date_converted = convert_to_iso8601(from_date)
-        #         to_date_converted = convert_to_iso8601(to_date)
-        #         expiry_date_converted = convert_to_iso8601(expiry_date)
-
-        time_interval = "30minute"
-        stock_code = "NIFTY"
-        exchange_code = "NFO"
-        product_type = "options"
-
-        if expiry_to_use == "weekly":
-            ohlcv_option_data = get_historical_data_for_option(strike, option_type, from_date, to_date,
-                                                               formatted_weekly_expiry_date, time_interval,
-                                                               stock_code="NIFTY", exchange_code="NFO",
-                                                               product_type="options")
-        elif expiry_to_use == "monthly":
-            ohlcv_option_data = get_historical_data_for_option(strike, option_type, from_date, to_date,
-                                                               formatted_monthly_expiry_date, time_interval,
-                                                               stock_code="NIFTY", exchange_code="NFO",
-                                                               product_type="options")
-        else:
-            ohlcv_option_data = get_historical_data_for_option(strike, option_type, from_date, to_date,
-                                                               formatted_monthly_expiry_date, time_interval,
-                                                               stock_code="NIFTY", exchange_code="NFO",
-                                                               product_type="options")
-        # print("OHLCV Data is fetched!")
-
-        ############################## Fetch LTP of option strike ###################################
-        if expiry_to_use == "weekly":
-            expiry_date = convert_to_iso8601(formatted_weekly_expiry_date)
-        elif expiry_to_use == "monthly":
-            expiry_date = convert_to_iso8601(formatted_monthly_expiry_date)
-        else:
-            expiry_date = convert_to_iso8601(formatted_monthly_expiry_date)
-        # print(f"Expiry date for getltp option is {expiry_date} ")
-
-        current_strike_ltp = get_options_ltp_icici_v2(strike, expiry_date, stock_code='NIFTY', exchange_code='NFO',
-                                                      product_type='options', right='call')
-        # print(f"current_strike_ltp is : {current_strike_ltp}")
-
-        ######################## Get anchored_vwap for strike ##########################################
-        #             anchor_value, anchor_time = get_anchors_from_dataframe(ohlcv_option_data)
-        anchors = get_multiple_anchors_from_dataframe(ohlcv_option_data, expiry_type="monthly")
-        # print(f"Anchors are {anchors}")
-        # Create file structure for anchored positions to be stored and viewed
-        filename_dictionary = create_position_files_with_anchors(strike, anchors)
-
-        for anchor_value, anchor_time in anchors:
-            print(f"________Working on Anchor_value {anchor_value} for Strike {strike} ______")
-            print(f"Anchor time is {anchor_time}")
-            # 1 seconds sleep for api limit
-            # time.sleep(1)
-            # for date, create filename_with_anchors
-            #             anchor_time = anchors[-1][1]
-            #             anchor_value = anchors[-1][0]
-            anchor_datetime = anchor_time
-            df = ohlcv_option_data.copy()
-            # Set datetime column as the index
-            df.set_index('datetime', inplace=True)
-            df.index = pd.to_datetime(df.index)
-
-            # Convert the anchor datetime to a pandas Timestamp
-            anchor_timestamp = pd.Timestamp(anchor_datetime)
-
-            # Filter the DataFrame based on the anchor datetime
-            filtered_df = df[df.index >= anchor_timestamp].copy()  # Make a copy
-
-            anchor_vwap = filtered_df['volume'].mul(filtered_df['high']).cumsum() / \
-                          filtered_df['volume'].cumsum()
-
-            x = len(df)
-            y = len(anchor_vwap)
-            nans = int(x - y)
-            nan_values = pd.Series([np.nan] * nans, dtype=float)
-            anchor_vwap = pd.concat([nan_values, anchor_vwap])
-
-            current_anchor = float(anchor_vwap.iloc[-1])
-            lower_range = current_anchor * 0.95
-            upper_range = current_anchor * 1.05
-            print(
-                f"Got anchor : {current_anchor} , Lower_range for anchor is : {lower_range} and Current Strike {strike} LTP is : {current_strike_ltp}")
-
-            ##################### BUY SELL and Exit conditions ######################################
-
-            dictionary_key = f"{strike}_{str(anchor_value)}"
-            orders_file = filename_dictionary[dictionary_key]
-            with open(orders_file) as f:
-                orders = f.readlines()
-            # TODO ADD CONDTION TO CHECK IF AVERAGE OF LAST 5 CANDLE IS ABOVE THE LOWER RANGE / ANCHORED_VWAP
-
-            ################################# New Code Addition ########################################
-            if len(orders) == 0:
-                # If there are no open positions , check for a buy signal
-                if lower_range <= current_strike_ltp <= current_anchor:
-                    # take the buy position
-                    with open(orders_file, "w") as f:
-                        f.write(f"{current_strike_ltp}\n")
-                    # print lower_range <= current_strike_ltp <= upper_range:
-                    print()
-                    print(f"!!!!!!!!!!!!!!!! SELL SIGNAL !!!!!!!!!!!!!!!!!")
-                    print_signal(strike, current_strike_ltp, "sell", time_interval)
-                    print()
-                else:
-                    # Sleep for 5 seconds ( to not hit api limit and retry)
-                    print(f"Current LTP {current_strike_ltp} is not in range of {lower_range} and {upper_range}")
-                    print("Nothing to do for this anchor!!!")
-                    time.sleep(5)
-            else:
-                # There is an open position, check for sl or target
-                print()
-                print(
-                    f"!!! There is an open position for strike {strike} , anchor {anchor_value} and anchor_time {anchor_time}!!!")
-                print()
-                # fetch buy price from the file
-                filedata = None
-                with open(orders_file, "r") as f:
-                    filedata = f.read()
-                f.close()
-                strike_buy_price = float(filedata)
-
-                pnl = strike_buy_price - current_strike_ltp
-
-                # Add to active positions list
-                active_positions.append([strike, pnl, anchor_value, anchor_time])
-
-                print(f"Pnl points is {pnl}")
-                print(f"Waiting for profit of Rs. {(strike_buy_price * profit_threshold) / 100.0}")
-                print(f"Will Exit at loss of Rs. {(strike_buy_price * loss_threshold) / 100.0}")
-                total_profit += pnl
-                # check if buy price - current_ltp hits target, if it does, book profit, exit and clean the file
-                if pnl > (strike_buy_price * profit_threshold) / 100.0:
-                    booked_profit += pnl
-                    last_booked_profit_for_strike = strike
-                    print(f"Profit threshold of {profit_threshold} % reached for strike {strike}")
-                    print(f"Price of purchase was {strike_buy_price} & Current LTP is {current_strike_ltp}")
-                    print(f"Points profit is {pnl}. Exiting trade! ")
-                    with open(orders_file, "w") as f:
-                        f.write("")
-                # check if buy price (-) current ltp hits my sl , if it does, exit and clean the file
-                elif pnl < -1 * (strike_buy_price * loss_threshold) / 100.0:
-                    booked_profit += pnl
-                    last_booked_profit_for_strike = strike
-
-                    print(f"Pnl is {pnl} which is less than {loss_threshold} % of {strike_buy_price}")
-                    print(f"Loss threshold of {loss_threshold} % reached for strike {strike}")
-                    print(f"Price of purchase was {strike_buy_price} & Current LTP is {current_strike_ltp}")
-                    print(f"Points loss is {pnl}. Exiting trade! ")
-                    with open(orders_file, "w") as f:
-                        f.write("")
-
-            # if lower_range <= current_strike_ltp <= upper_range:
-            #     # If no position exists for the strike, do this
-            #     if len(orders) == 0:
-            #         # take the buy position
-            #         with open(orders_file, "w") as f:
-            #             f.write(f"{current_strike_ltp}\n")
-            #         # print lower_range <= current_strike_ltp <= upper_range:
-            #         print()
-            #         print(f"!!!!!!!!!!!!!!!! SELL SIGNAL !!!!!!!!!!!!!!!!!")
-            #         print_signal(strike, current_strike_ltp, "sell", time_interval)
-            #         print()
-            #
-            #     # else if there is an open position, check for sl or target
-            #     else:
-            #         # fetch buy price from the file
-            #         filedata = None
-            #         with open(orders_file, "r") as f:
-            #             filedata = f.read()
-            #         f.close()
-            #         strike_buy_price = float(filedata)
-            #
-            #         pnl = current_strike_ltp - strike_buy_price
-            #
-            #         # check if buy price - current_ltp hits target, if it does, book profit, exit and clean the file
-            #         if pnl > (strike_buy_price * profit_threshold) / 100.0:
-            #             print(f"Profit threshold of {profit_threshold} % reached for strike {strike}")
-            #             print(f"Price of purchase was {strike_buy_price} & Current LTP is {current_strike_ltp}")
-            #             print(f"Points profit is {pnl}. Exiting trade! ")
-            #             with open(orders_file, "w") as f:
-            #                 f.write("")
-            #         # check if buy price (-) current ltp hits my sl , if it does, exit and clean the file
-            #         elif pnl < -1*(strike_buy_price * loss_threshold) / 100.0:
-            #             print(f"Pnl is {pnl} which is less than {loss_threshold} % of {strike_buy_price}")
-            #             print(f"Loss threshold of {loss_threshold} % reached for strike {strike}")
-            #             print(f"Price of purchase was {strike_buy_price} & Current LTP is {current_strike_ltp}")
-            #             print(f"Points loss is {pnl}. Exiting trade! ")
-            #             with open(orders_file, "w") as f:
-            #                 f.write("")
-            # else:
-            #     # Sleep for 5 seconds ( to not hit api limit and retry)
-            #     print(f"Current LTP {current_strike_ltp} is not in range of {lower_range} and {upper_range}")
-            #     print("Nothing to do for this anchor!!!")
-            #     time.sleep(5)
-
-            print("__________________________________________________________")
-            print()
-
-    # stop execution for 10 seconds to not hit api limit
-    print("Waiting 10 seconds to run code again....")
-    print()
-    print("________________________________________________________________________")
-    print(f"Total Profit is {total_profit + booked_profit} (Incl. Current Positions)")
-    print(f"Total Booked Profit is {booked_profit}")
-    print(f"Last Booked Profit was for strike : {last_booked_profit_for_strike}")
-    print(f"Active Position and it's pnl are : ")
-    for positions in active_positions:
-        print(
-            f"Strike : {positions[0]} , Pnl : {positions[1]} , Anchor : {positions[2]} , Anchor Time : {positions[3]}")
-    print("________________________________________________________________________")
-    time.sleep(10)
-
-print("Its 3:00 pm or later, exiting all the strikes, clearing the files!")
-# # Exit all positions and erase all orders file after 3:00 pm
-# for i in range(len(strikes_away)):
-#     filename = os.path.join("orders", datetime.now().strftime("%m-%d-%Y"), f"{strikes_away[i]}.txt")
-#     with open(filename, "w") as f:
-#         f.write("")
