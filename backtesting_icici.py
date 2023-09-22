@@ -1,3 +1,5 @@
+import os
+
 import backtest_config
 import pandas as pd
 from datetime import datetime
@@ -137,6 +139,12 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
     amount_to_invest = 10000  # Initial investment amount
     stop_loss_percentage = 0.01  # 1% stop loss
 
+    # for caching data
+    cache_folder = "cached_strike_data"
+    # Ensure the cache folder exists
+    if not os.path.exists(cache_folder):
+        os.makedirs(cache_folder)
+
     # Algo variables
     positions_dictionary = {}
     buy_price_dictionary = {}
@@ -204,9 +212,9 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
 
                 print(f"Expiry date for {day}-{month}-{year} is {expiry_date_options}")
                 # using the first candle of the day in filtered_df, calculate the nearest strike, strikes away and get historical data for it
-                symbol_candle = filtered_data.iloc[0]
+                symbol_candle_day = filtered_data.iloc[0]
                 # get data until given candle
-                symbol_ltp = float(symbol_candle['close'])
+                symbol_ltp = float(symbol_candle_day['close'])
                 print(f"Day's {day}-{month}-{year} first candle LTP : {symbol_ltp}")
 
                 # Calculate nearest strike for Nifty
@@ -217,21 +225,36 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
 
                 # Get historical data for strike and store it into cache if not present
                 for strike in strikes_away:
+                    cache_name = str(strike) + str(expiry_date_options)
+                    sanitized_cache_name = backtest_config.sanitize_filename(cache_name)
+                    cache_path = os.path.join(cache_folder, sanitized_cache_name + ".csv")
                     # READ DATA FROM CACHE BEFORE CALLING API
-                    # TODO CHECK THIS CODE EXECUTION VIA DEBUGGER
-                    if strike_df_cache.get(str(strike) + str(expiry_date_options)) is not None:
-                        strike_df = strike_df_cache.get(str(strike) + str(expiry_date_options))
+                    if os.path.exists(cache_path):
+                        # If it exists, load it from the CSV file
+                        strike_df = pd.read_csv(cache_path)
                     else:
                         strike_df = backtest_config.get_historical_data_for_option(breeze, strike, "call", "auto",
-                                                                                   "auto", expiry_date_options,
+                                                                                   "auto", str(expiry_date_options),
                                                                                    time_interval,
                                                                                    stock_code=stock_code_options,
                                                                                    exchange_code=exchange_code_options,
                                                                                    product_type=product_type_options)
-                        # cache the strike df
-                        # todo expiry_date_options needs to be parsed for a better cache name
-                        cache_name = str(strike) + str(expiry_date_options)
-                        strike_df_cache[cache_name] = strike_df
+                        # Cache the data into a CSV file
+                        strike_df.to_csv(cache_path, index=False)
+
+                    # if strike_df_cache.get(str(strike) + str(expiry_date_options)) is not None:
+                    #     strike_df = strike_df_cache.get(str(strike) + str(expiry_date_options))
+                    # else:
+                    #     strike_df = backtest_config.get_historical_data_for_option(breeze, strike, "call", "auto",
+                    #                                                                "auto", str(expiry_date_options),
+                    #                                                                time_interval,
+                    #                                                                stock_code=stock_code_options,
+                    #                                                                exchange_code=exchange_code_options,
+                    #                                                                product_type=product_type_options)
+                    #     # cache the strike df
+                    #     cache_name = str(strike) + str(expiry_date_options)
+                    # Store the DataFrame in the cache
+                    strike_df_cache[sanitized_cache_name] = strike_df
 
                 # Iterate over each candle and get current candle data
                 for index, symbol_candle in filtered_data.iterrows():
@@ -246,11 +269,19 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
                         option_type = "call"
                         from_date = "auto"
                         to_date = "auto"
+                        cache_name = str(strike) + str(expiry_date_options)
+                        sanitized_cache_name = backtest_config.sanitize_filename(cache_name)
+                        strike_df_until_symbol_candle = strike_df_cache.get(sanitized_cache_name).copy()
 
+                        # Assuming symbol_candle['datetime'] is a datetime object
+                        symbol_datetime = symbol_candle['datetime']
+                        # Convert the 'datetime' column in strike_df_until_symbol_candle to datetime objects
+                        strike_df_until_symbol_candle['datetime'] = strike_df_until_symbol_candle['datetime'].apply(
+                            lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
+                        )
                         # get historical data for strike until given candle using cache created earlier
-                        strike_df_until_symbol_candle = strike_df_cache.get(str(strike) + str(expiry_date_options))
                         strike_df_until_symbol_candle = strike_df_until_symbol_candle[
-                            strike_df_until_symbol_candle['datetime'] <= symbol_candle['datetime']]
+                            strike_df_until_symbol_candle['datetime'] <= symbol_datetime]
                         strike_df_until_symbol_candle = strike_df_until_symbol_candle.reset_index(drop=True)
 
                         # get last strike candle data
@@ -264,27 +295,34 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
                                                                                       expiry_type=expiry_type_options)
 
                         # filename_dictionary = backtest_config.create_position_files_with_anchors(strike, anchors, backtesting=True)
+                        current_close_price = float(strike_current_candle["close"])
+
+                        current_time = pd.Timestamp(symbol_candle["datetime"]).time()
+                        if current_time >= pd.Timestamp("14:30:00").time():
+                            for anchor_value, anchor_time in anchors:
+                                # check if positions_dictionary[anchor_time] exists
+                                if positions_dictionary.get(anchor_time) is None:
+                                    positions_dictionary[anchor_time] = None
+                                if positions_dictionary[anchor_time] == "sell":
+                                    positions_dictionary[anchor_time] = "buy"
+                                    pnl = sell_price_dictionary[anchor_time] - current_close_price
+                                    total_pnl += pnl
+                                    print("Found a BUY SIGNAL (End of Day)")
+                                    print("Date: " + str(strike_current_candle["datetime"]))
+                                    print("Buy Price: " + str(current_close_price))
+                                    print("P&L: {:.2f}".format(pnl))
+                                    print(
+                                        "End of day " + str(current_time) + ". Total P&L: {:.2f}".format(total_pnl))
+                                    print("---------------------------------------------------------------------")
+                                    print()
+                                # Reset position to None
+                                positions_dictionary[anchor_time] = None
+                            continue
+
                         for anchor_value, anchor_time in anchors:
                             #             print(f"working on anchor {anchor_time}")
-                            current_time = pd.Timestamp(symbol_candle["datetime"]).time()
-                            if current_time >= pd.Timestamp("15:00:00").time():
-                                for anchor_value, anchor_time in anchors:
-                                    if positions_dictionary[anchor_time] == "sell":
-                                        positions_dictionary[anchor_time] = "buy"
-                                        pnl = sell_price_dictionary[anchor_time] - current_close_price
-                                        total_pnl += pnl
-                                        print("Found a BUY SIGNAL (End of Day)")
-                                        print("Date: " + str(candle_data["parsed_date"]))
-                                        print("Buy Price: " + str(current_close_price))
-                                        print("P&L: {:.2f}".format(pnl))
-                                        print(
-                                            "End of day " + str(current_time) + ". Total P&L: {:.2f}".format(total_pnl))
-                                        print("---------------------------------------------------------------------")
-                                        print()
-                                    # Reset position to None
-                                    positions_dictionary[anchor_time] = None
-                                continue
 
+                            # backtest_config.temp_plot_ohlcv(strike_df_until_symbol_candle, anchor_time)
                             if anchor_time in positions_dictionary.keys():
                                 pass
                             else:
@@ -297,9 +335,15 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
                             #             anchor_value, anchor_time = get_anchors_from_dataframe(train_data)
                             anchor_timeframe = anchor_time
 
-                            anchor_vwap = strike_df_until_symbol_candle.loc[anchor_timeframe:]['volume'].mul(
-                                strike_df_until_symbol_candle.loc[anchor_timeframe:]['close']).cumsum() / \
-                                          strike_df_until_symbol_candle.loc[anchor_timeframe:]['volume'].cumsum()
+                            strike_temporary_df = strike_df_until_symbol_candle.copy()
+                            # Set datetime column as the index
+                            strike_temporary_df.set_index('datetime', inplace=True)
+                            strike_temporary_df.index = pd.to_datetime(strike_temporary_df.index)
+                            # Filter the DataFrame based on the anchor datetime
+                            filtered_df = strike_temporary_df[strike_temporary_df.index >= anchor_timeframe].copy()  # Make a copy
+
+                            anchor_vwap = filtered_df['volume'].mul(filtered_df['high']).cumsum() / \
+                                          filtered_df['volume'].cumsum()
 
                             x = len(strike_df_until_symbol_candle)
                             y = len(anchor_vwap)
@@ -312,7 +356,8 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
                             current_anchor = float(anchor_vwap.iloc[-1])
                             lower_range = current_anchor * 0.85
                             upper_range = current_anchor * 1.15
-
+                            print(f"anchor_timeframe: {anchor_timeframe} ,,, current_anchor: {current_anchor}")
+                            print(f"for strike {strike}, current_close_price : {current_close_price} and lower_range: {lower_range} ")
                             ############################ Buy / sell code conditions ###########################
                             if positions_dictionary[anchor_time] is None:
                                 # First condition is always a sell when there's no position

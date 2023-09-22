@@ -88,6 +88,13 @@ def num_days_in_dataframe(df):
     number_of_days = date_difference.days
     return number_of_days
 
+# Define a function to sanitize the cache_name and create a valid filename
+def sanitize_filename(filename):
+    # Replace invalid characters with underscores
+    invalid_chars = '\\/:*?"<>|'
+    for char in invalid_chars:
+        filename = filename.replace(char, '_')
+    return filename
 
 def get_anchors_from_dataframe(df):
     # Find the highest value in the 'high' column
@@ -542,6 +549,42 @@ def plot_ohlc_v2(ohlcv_option_data):
              title="Candlestick Chart with Anchored VWAP")
     plt.show()
 
+def temp_plot_ohlcv(ohlcv_option_data, anchor_timestamp):
+    """
+
+    :param ohlcv_option_data:  Gets options OHLCV data and plots it by close and datetime fields (Data has datetime and close fields)
+    Does not require index to be converted to string
+    """
+    df = ohlcv_option_data.copy()
+    df['datetime'] = pd.to_datetime(df['datetime'])
+    df['close'] = pd.to_numeric(df['close'])
+
+    # Set datetime column as the index
+    df.set_index('datetime', inplace=True)
+
+    # # Define your anchor datetime (you can replace this with your specific anchor datetime)
+    # anchor_datetime = "2023-08-17 15:30:00"
+    #
+    # # Convert the anchor datetime to a pandas Timestamp
+    # anchor_timestamp = pd.Timestamp(anchor_datetime)
+
+    # Filter the DataFrame based on the anchor datetime
+    filtered_df = df[df.index >= anchor_timestamp].copy()  # Make a copy
+
+    # Calculate VWAP in the copy
+    filtered_df['vwap'] = (filtered_df['high'] * filtered_df['volume']).cumsum() / filtered_df['volume'].cumsum()
+    # Create a candlestick chart using mplfinance
+
+    # num_candles_to_display = 100
+    # filtered_df = filtered_df.iloc[-num_candles_to_display:]
+
+    ohlc = mpf.make_addplot(filtered_df, type='candle', panel=0)
+    vwap = mpf.make_addplot(filtered_df['vwap'], panel=0, color='blue', secondary_y=False)
+
+    mpf.plot(filtered_df, type='candle', addplot=[ohlc, vwap], style='yahoo',
+             title="Candlestick Chart with Anchored VWAP", warn_too_much_data=2000)
+    plt.show()
+    print("here")
 
 # def get_expiry_date():
 
