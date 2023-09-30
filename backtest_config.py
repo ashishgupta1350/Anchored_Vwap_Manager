@@ -88,6 +88,7 @@ def num_days_in_dataframe(df):
     number_of_days = date_difference.days
     return number_of_days
 
+
 # Define a function to sanitize the cache_name and create a valid filename
 def sanitize_filename(filename):
     # Replace invalid characters with underscores
@@ -95,6 +96,7 @@ def sanitize_filename(filename):
     for char in invalid_chars:
         filename = filename.replace(char, '_')
     return filename
+
 
 def get_anchors_from_dataframe(df):
     # Find the highest value in the 'high' column
@@ -164,7 +166,7 @@ def get_multiple_anchors_from_dataframe(train_data, expiry_type="monthly"):
 
 # ICICI returns at max 1000 candles for data at a time, to get more than 1000 candles, we need to make multiple requests
 def get_stock_fut_index_data_helper(breeze, from_date, to_date, time_interval, stock_code="NIFTY", exchange_code="NSE",
-                                  product_type="cash"):
+                                    product_type="cash"):
     """
 
         :param breeze: BreezeConnect object
@@ -237,10 +239,12 @@ def get_stock_fut_index_data_helper(breeze, from_date, to_date, time_interval, s
         return response['Success']
     return response['Success']
 
-def get_historical_data_for_stock_fut_index(breeze, from_date, to_date, time_interval, stock_code="NIFTY", exchange_code="NSE",
-                                  product_type="cash"):
 
-    data = get_stock_fut_index_data_helper(breeze, from_date, to_date, time_interval, stock_code, exchange_code, product_type)
+def get_historical_data_for_stock_fut_index(breeze, from_date, to_date, time_interval, stock_code="NIFTY",
+                                            exchange_code="NSE",
+                                            product_type="cash"):
+    data = get_stock_fut_index_data_helper(breeze, from_date, to_date, time_interval, stock_code, exchange_code,
+                                           product_type)
     if len(data) < 1000:
         return data
     else:
@@ -248,15 +252,17 @@ def get_historical_data_for_stock_fut_index(breeze, from_date, to_date, time_int
             to_date_new = data[0]['datetime']
             from_date = from_date
             time.sleep(1)
-            data_new = get_stock_fut_index_data_helper(breeze, from_date, to_date_new, time_interval, stock_code, exchange_code, product_type)
+            data_new = get_stock_fut_index_data_helper(breeze, from_date, to_date_new, time_interval, stock_code,
+                                                       exchange_code, product_type)
             # data = data_new - the last point of data_new + data
             data = data_new[:-1] + data
             if len(data_new) < 1000:
                 return data
 
 
-def get_historical_data_for_option_helper(breeze, strike_price, option_type, from_date, to_date, expiry_date, time_interval,
-                                   stock_code="NIFTY", exchange_code="NFO", product_type="options"):
+def get_historical_data_for_option_helper(breeze, strike_price, option_type, from_date, to_date, expiry_date,
+                                          time_interval,
+                                          stock_code="NIFTY", exchange_code="NFO", product_type="options"):
     """
 
     :param strike_price: INT : Example: 19500
@@ -361,8 +367,9 @@ def get_historical_data_for_option(breeze, strike_price, option_type, from_date,
     if to_date == "auto":
         to_date = "2100-09-06 12:34:56"
 
-    data = get_historical_data_for_option_helper(breeze, strike_price, option_type, from_date, to_date, expiry_date, time_interval,
-                                   stock_code, exchange_code, product_type)
+    data = get_historical_data_for_option_helper(breeze, strike_price, option_type, from_date, to_date, expiry_date,
+                                                 time_interval,
+                                                 stock_code, exchange_code, product_type)
     if len(data) < 1000:
         return pd.DataFrame(data)
 
@@ -371,8 +378,9 @@ def get_historical_data_for_option(breeze, strike_price, option_type, from_date,
             to_date_new = data[0]['datetime']
             from_date = from_date
             time.sleep(1)
-            data_new = get_historical_data_for_option_helper(breeze, strike_price, option_type, from_date, to_date_new, expiry_date, time_interval,
-                                   stock_code, exchange_code, product_type)
+            data_new = get_historical_data_for_option_helper(breeze, strike_price, option_type, from_date, to_date_new,
+                                                             expiry_date, time_interval,
+                                                             stock_code, exchange_code, product_type)
             # data = data_new - the last point of data_new + data
             data = data_new[:-1] + data
             if len(data_new) < 1000:
@@ -380,7 +388,7 @@ def get_historical_data_for_option(breeze, strike_price, option_type, from_date,
 
 
 def get_complete_historical_data_for_option(breeze, strike_price, option_type, expiry_date, time_interval,
-                                   stock_code="NIFTY", exchange_code="NFO", product_type="options"):
+                                            stock_code="NIFTY", exchange_code="NFO", product_type="options"):
     """
     Gets total historical data for option automatically without inputing from and to date
     :param strike_price: INT : Example: 19500
@@ -549,6 +557,7 @@ def plot_ohlc_v2(ohlcv_option_data):
              title="Candlestick Chart with Anchored VWAP")
     plt.show()
 
+
 def temp_plot_ohlcv(ohlcv_option_data, anchor_timestamp):
     """
 
@@ -585,6 +594,53 @@ def temp_plot_ohlcv(ohlcv_option_data, anchor_timestamp):
              title="Candlestick Chart with Anchored VWAP", warn_too_much_data=2000)
     plt.show()
     print("here")
+
+
+def temp_plot_ohlcv_v2(ohlcv_option_data, anchor_timestamp):
+    """
+
+    :param ohlcv_option_data:  Gets options OHLCV data and plots it by close and datetime fields (Data has datetime and close fields)
+    Does not require index to be converted to string
+    """
+    df = ohlcv_option_data.copy()
+    df['datetime'] = pd.to_datetime(df['datetime'])
+    df['close'] = pd.to_numeric(df['close'])
+
+    # Set datetime column as the index
+    df.set_index('datetime', inplace=True)
+
+    # # Define your anchor datetime (you can replace this with your specific anchor datetime)
+    # anchor_datetime = "2023-08-17 15:30:00"
+    #
+    # # Convert the anchor datetime to a pandas Timestamp
+    # anchor_timestamp = pd.Timestamp(anchor_datetime)
+
+    # Filter the DataFrame based on the anchor datetime
+    filtered_df = df[df.index >= anchor_timestamp].copy()  # Make a copy
+
+    # Calculate VWAP in the copy
+    # filtered_df['vwap'] = (filtered_df['high'] * filtered_df['volume']).cumsum() / filtered_df['volume'].cumsum()
+    anchor_vwap = (filtered_df['high'] * filtered_df['volume']).cumsum() / filtered_df['volume'].cumsum()
+    # Create a candlestick chart using mplfinance
+
+    # num_candles_to_display = 100
+    # filtered_df = filtered_df.iloc[-num_candles_to_display:]
+    x = len(df)
+    y = len(anchor_vwap)
+    nans = int(x - y)
+    nan_values = pd.Series([np.nan] * nans, dtype=float)
+    #         extended_series = pd.concat([nan_values, anchor_vwap])
+    anchor_vwap = pd.concat([nan_values, anchor_vwap])
+    filtered_df['vwap'] = anchor_vwap
+
+    ohlc = mpf.make_addplot(df, type='candle', panel=0)
+    vwap = mpf.make_addplot(anchor_vwap, panel=0, color='blue', secondary_y=False)
+
+    mpf.plot(df, type='candle', addplot=[ohlc, vwap], style='yahoo',
+             title="Candlestick Chart with Anchored VWAP", warn_too_much_data=2000)
+    plt.show()
+    print("here")
+
 
 # def get_expiry_date():
 
@@ -651,7 +707,87 @@ def get_expiry_date_for_candle(expiry_name, expiry_type, day, month, year):
     else:
         raise ValueError("Invalid expiry_type")
 
+    return expiry_date
 
+
+# Define a function to parse dates with two different formats
+def parse_date(date_str):
+    try:
+        # Try parsing the date in the format "25-Dec-23"
+        return pd.to_datetime(date_str, format='%d-%b-%y')
+    except ValueError:
+        try:
+            # Try parsing the date in the format "January 26, 2022"
+            return pd.to_datetime(date_str, format='%B %d, %Y')
+        except ValueError:
+            # If neither format works, return None
+            return None
+
+
+def is_holiday(date, holiday_df):
+    # Check if the date is in the holiday_df DataFrame
+    return not holiday_df[holiday_df['Date'] == date].empty
+
+
+def get_expiry_date_for_candle_v2(expiry_name, expiry_type, day, month, year):
+    """
+    Given a day, month, and year, this function returns the next expiry date for the given expiry_name and expiry_type
+
+    :param expiry_name: "nifty" , "sensex" , "banknifty" , "midcap" , "finnifty"
+    :param expiry_type: "weekly" , "monthly"
+    :param day: 1-31
+    :param month: 1-12
+    :param year: any year (int)
+    :return: Returns the next expiry date for the given expiry_name, expiry_type, day, month, and year
+    """
+    # Define a dictionary to map expiry names to their respective weekday
+    expiry_day_mapping = {
+        "nifty": 3,  # Thursday
+        "sensex": 4,  # Friday
+        "banknifty": 2,  # Wednesday
+        "midcap": 0,  # Monday
+        "finnifty": 1  # Tuesday
+    }
+
+    # Determine the day of the week for the specified expiry_name
+    if expiry_name in expiry_day_mapping:
+        expiry_day = expiry_day_mapping[expiry_name]
+    else:
+        raise ValueError("Invalid expiry_name")
+
+    # Create a datetime object for the specified day, month, and year
+    specified_date = dt.datetime(year, month, day)
+
+    if expiry_type == "weekly":
+        # Calculate the number of days to add for weekly expiry
+        days_until_expiry = (expiry_day - specified_date.weekday() + 7) % 7
+
+        # Calculate the expiry date by adding the days_until_expiry to the specified date
+        expiry_date = specified_date + dt.timedelta(days=days_until_expiry)
+    elif expiry_type == "monthly":
+        # Calculate the last day of the month for the specified month and year
+        last_day_of_month = dt.datetime(year, month, 1) + dt.timedelta(days=31)
+        while last_day_of_month.month != month:
+            last_day_of_month -= dt.timedelta(days=1)
+
+        # Find the last weekday (Monday to Friday) of the month
+        while last_day_of_month.weekday() != expiry_day:
+            last_day_of_month -= dt.timedelta(days=1)
+
+        expiry_date = last_day_of_month
+    else:
+        raise ValueError("Invalid expiry_type")
+
+    # Read the Excel file into a DataFrame
+    holiday_df = pd.read_excel('holiday_list.xlsx')
+    # Apply the parse_date function to the 'Date' column
+    holiday_df['Date'] = holiday_df['Date'].apply(parse_date)
+    # Ensure the 'Date' column is in the correct datetime format
+    holiday_df['Date'] = pd.to_datetime(holiday_df['Date'])
+    # Check if the expiry_date is a holiday
+    while is_holiday(expiry_date, holiday_df):
+        # If it's a holiday, subtract one day from the expiry_date
+        expiry_date -= dt.timedelta(days=1)
     return expiry_date
 
 
@@ -724,7 +860,7 @@ def get_from_date_to_date():
     return from_date, to_date
 
 
-def get_nearest_strike_v2(symbol_ltp, difference_between_strikes = 50):
+def get_nearest_strike_v2(symbol_ltp, difference_between_strikes=50):
     """
     Generic function to get the nearest strike to the symbol_ltp
     :param symbol_ltp: Generic symbol LTP to get the nearest strike (19223 -> 19200)
@@ -761,7 +897,7 @@ def get_strikes_away_v2(nearest_strike):
     return [first_strike, second_strike, third_strike]
 
 
-def create_position_files_with_anchors(strike, anchors, backtesting = False):
+def create_position_files_with_anchors(strike, anchors, backtesting=False):
     """
 
     :param backtesting: False or True

@@ -1,3 +1,7 @@
+from IPython.display import display, HTML
+
+display(HTML("<style>.container { width:90% !important; }</style>"))
+
 import os
 
 import backtest_config
@@ -13,7 +17,7 @@ import matplotlib.pyplot as plt
 import mplfinance as mpf
 from datetime import timedelta
 import time
-
+import talib
 cur_path = "C:\\Users\\ashis\\OneDrive\\Desktop\\Anchored_Vwap_Code\\"
 
 
@@ -118,7 +122,8 @@ def get_multiple_anchors_from_dataframe(train_data):
 
 def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, stock_code, exchange_code, expiry_name):
     expiry_name = "nifty"
-    from_date = "2023-04-19 12:34:56"
+    # from_date = "2023-01-19 12:34:56"
+    from_date = "2022-01-19 10:34:56"
     to_date = "2023-09-06 12:34:56"
     time_interval = "30minute"
     product_type = "cash"
@@ -133,11 +138,15 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
     expiry_type_options = "monthly"
     expiry_name_options = "nifty"
     # Algo thresholds
-    profit_threshold = 0.75  # 75% profit threshold
-    loss_threshold = -0.25  # 25% loss threshold (negative value)
+    lower_range_threshold = 95/100.0
+    upper_range_threshold = 105/100.0
+
+    profit_threshold = 0.25  # 75% profit threshold
+    loss_threshold = -0.10  # 25% loss threshold (negative value)
     total_pnl = 0  # Initialize total P&L
-    amount_to_invest = 10000  # Initial investment amount
+    amount_to_invest = 10000000  # Initial investment amount
     stop_loss_percentage = 0.01  # 1% stop loss
+
 
     # for caching data
     cache_folder = "cached_strike_data"
@@ -191,23 +200,30 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
     for year in unique_years:
         # Get unique months for the current year
         unique_months = df[df['year'] == year]['month'].unique()
-
+        print(f"In year {year}, there are {len(unique_months)} months in data")
         # Iterate over each month in the current year
         for month in unique_months:
             # Get unique days for the current month in the current year
             unique_days = df[(df['year'] == year) & (df['month'] == month)]['day'].unique()
-
+            print(f"In month {month} of year {year}")
             # Iterate over each day in the current month in the current year
+            print(f"No. of days in month {month} of year {year} : {len(unique_days)}")
+
+
+
             for day in unique_days:
                 # reset the buy_price_dictionary and sell_price_dictionary for each day
+                print("\n\n")
                 buy_price_dictionary = {}
                 sell_price_dictionary = {}
+                positions_dictionary = {}
 
+                print(f"Working on day {day} of month {month} of year {year}")
                 # Filter the DataFrame to get data for the current year, month, and day
                 filtered_data = df[(df['year'] == year) & (df['month'] == month) & (df['day'] == day)]
 
                 # calculate expiry date using day
-                expiry_date_options = backtest_config.get_expiry_date_for_candle(expiry_name_options,
+                expiry_date_options = backtest_config.get_expiry_date_for_candle_v2(expiry_name_options,
                                                                                  expiry_type_options, day, month, year)
 
                 print(f"Expiry date for {day}-{month}-{year} is {expiry_date_options}")
@@ -222,7 +238,7 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
                                                                                difference_between_strikes=difference_between_strikes)
                 # Calculate strikes away in positive direction
                 strikes_away = backtest_config.get_strikes_away_v2(nearest_strike_integer)
-
+                print(f"No. of candles in day {day}-{month}-{year} : {len(filtered_data)}")
                 # Get historical data for strike and store it into cache if not present
                 for strike in strikes_away:
                     cache_name = str(strike) + str(expiry_date_options)
@@ -261,11 +277,13 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
 
                     # cumilative data for symbol until current candle (Ex nifty until 10:30 am)
                     # symbol_data_until_candle = df[df['datetime'] <= symbol_candle['datetime']]
+                    print(f"Time : {(symbol_candle['datetime'].strftime('%H:%M:%S'))}___________________")
 
                     # Anchored vwap logic as if the code is running live
                     for i in range(len(strikes_away)):
                         strike = strikes_away[i]
-                        print(f"___________________________Working on Strike : {strike}_______________________________")
+                        candle_time_formatted = pd.Timestamp(symbol_candle["datetime"]).time()
+                        print(f"______________Working on Strike : {strike} , Time : {candle_time_formatted}___________________")
                         option_type = "call"
                         from_date = "auto"
                         to_date = "auto"
@@ -283,6 +301,10 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
                         strike_df_until_symbol_candle = strike_df_until_symbol_candle[
                             strike_df_until_symbol_candle['datetime'] <= symbol_datetime]
                         strike_df_until_symbol_candle = strike_df_until_symbol_candle.reset_index(drop=True)
+                        strike_df_until_symbol_candle['ema100'] = talib.EMA(strike_df_until_symbol_candle['close'],
+                                                                           timeperiod=100)
+                        strike_df_until_symbol_candle['ema50'] = talib.EMA(strike_df_until_symbol_candle['close'],
+                                                                           timeperiod=50)
 
                         # get last strike candle data
                         strike_current_candle = strike_df_until_symbol_candle.iloc[-1]
@@ -290,7 +312,6 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
                         #  existance
                         current_strike_ltp = float(strike_current_candle['close'])
 
-                        # todo check if this is correct
                         anchors = backtest_config.get_multiple_anchors_from_dataframe(strike_df_until_symbol_candle,
                                                                                       expiry_type=expiry_type_options)
 
@@ -298,13 +319,19 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
                         current_close_price = float(strike_current_candle["close"])
 
                         current_time = pd.Timestamp(symbol_candle["datetime"]).time()
-                        if current_time >= pd.Timestamp("14:30:00").time():
+                        if current_time <= pd.Timestamp("09:30:00").time():
+                            # we dont take trades before 9:30
+                            print(f"_________________________ Time is : {current_time} It's before 9:30\n_____________________________")
+                            continue
+                        if current_time >= pd.Timestamp("15:00:00").time():
                             for anchor_value, anchor_time in anchors:
                                 # check if positions_dictionary[anchor_time] exists
                                 if positions_dictionary.get(anchor_time) is None:
                                     positions_dictionary[anchor_time] = None
-                                if positions_dictionary[anchor_time] == "sell":
+                                elif positions_dictionary[anchor_time] == "sell":
                                     positions_dictionary[anchor_time] = "buy"
+                                    print("_________________________ Time is : {current_time} It's End of Day\n_____________________________")
+                                    backtest_config.temp_plot_ohlcv_v2(strike_df_until_symbol_candle, anchor_time)
                                     pnl = sell_price_dictionary[anchor_time] - current_close_price
                                     total_pnl += pnl
                                     print("Found a BUY SIGNAL (End of Day)")
@@ -317,17 +344,21 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
                                     print()
                                 # Reset position to None
                                 positions_dictionary[anchor_time] = None
+                            print(f"_________________________ Time is : {current_time} It's End of Day\n_____________________________")
+
                             continue
 
                         for anchor_value, anchor_time in anchors:
                             #             print(f"working on anchor {anchor_time}")
-
-                            # backtest_config.temp_plot_ohlcv(strike_df_until_symbol_candle, anchor_time)
+                            #                             print(anchors)
+                            #                             backtest_config.temp_plot_ohlcv(strike_df_until_symbol_candle, anchor_time)
+                            #                             time.sleep(8)
+                            print(f"For strike {strike} , working on anchor {anchor_value} at {anchor_time} for expiry {expiry_date_options}")
                             if anchor_time in positions_dictionary.keys():
                                 pass
                             else:
-                                print("setting to none")
-                                print(f" {anchor_time} not found in vault")
+                                # print("setting to none")
+                                # print(f" {anchor_time} not found in vault")
                                 positions_dictionary[anchor_time] = None
                                 buy_price_dictionary[anchor_time] = None
                                 sell_price_dictionary[anchor_time] = None
@@ -340,8 +371,10 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
                             strike_temporary_df.set_index('datetime', inplace=True)
                             strike_temporary_df.index = pd.to_datetime(strike_temporary_df.index)
                             # Filter the DataFrame based on the anchor datetime
-                            filtered_df = strike_temporary_df[strike_temporary_df.index >= anchor_timeframe].copy()  # Make a copy
+                            filtered_df = strike_temporary_df[
+                                strike_temporary_df.index >= anchor_timeframe].copy()  # Make a copy
 
+                            # Calculate the anchored VWAP
                             anchor_vwap = filtered_df['volume'].mul(filtered_df['high']).cumsum() / \
                                           filtered_df['volume'].cumsum()
 
@@ -354,23 +387,64 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
 
                             current_close_price = float(strike_current_candle["close"])
                             current_anchor = float(anchor_vwap.iloc[-1])
-                            lower_range = current_anchor * 0.85
-                            upper_range = current_anchor * 1.15
-                            print(f"anchor_timeframe: {anchor_timeframe} ,,, current_anchor: {current_anchor}")
-                            print(f"for strike {strike}, current_close_price : {current_close_price} and lower_range: {lower_range} ")
+                            lower_range = current_anchor * lower_range_threshold
+                            upper_range = current_anchor * upper_range_threshold
+
+                            ################ one of the sell logics ############################
+                            column_name = 'high'
+                            if len(strike_df_until_symbol_candle) >= 5:
+                                # Calculate the average of the last 5 candles if there are at least 5 rows
+                                average_last_5_candles = strike_df_until_symbol_candle[column_name].tail(5).mean()
+                            else:
+                                # Calculate the average of all available rows if there are fewer than 5 rows
+                                average_last_5_candles = strike_df_until_symbol_candle[column_name].mean()
+
+                            ############## Second: Not sell logic #################################
+                            ema100 = float(strike_df_until_symbol_candle['ema100'].iloc[-1])
+                            ema50 = float(strike_df_until_symbol_candle['ema50'].iloc[-1])
                             ############################ Buy / sell code conditions ###########################
                             if positions_dictionary[anchor_time] is None:
                                 # First condition is always a sell when there's no position
-                                if lower_range <= current_close_price:
+                                if current_close_price >= current_anchor:
+                                    print(f"Current close price {current_close_price} is greater than current anchor {current_anchor}")
+                                    print(f"We ignore this signal")
+                                    pass
+                                elif average_last_5_candles >= current_anchor:
+                                    print(f"Average of last 5 candles {average_last_5_candles} is greater than current anchor {current_anchor}")
+                                    print(f"We ignore this signal")
+                                    pass
+                                elif average_last_5_candles >= 0.95*anchors[0][0]:
+                                    print(f"Average of last 5 candles {average_last_5_candles} higher than ema 100: {ema100}")
+                                    print(f"We ignore this signal")
+                                    pass
+                                elif ema50 > ema100:
+                                    print(
+                                        f"Market is in supposed uptrend, with ema50: {ema50} higher than ema100: {ema100}")
+                                    print(f"We ignore this signal")
+                                    pass
+                                elif lower_range <= current_close_price:
+
+                                    backtest_config.temp_plot_ohlcv_v2(strike_df_until_symbol_candle, anchor_time)
+
                                     sell_price_dictionary[anchor_time] = current_close_price
                                     positions_dictionary[anchor_time] = "sell"
                                     print("Found a SELL SIGNAL (First Signal)")
                                     print("Date: " + str(strike_current_candle["datetime"]))
                                     print("Sell Price: " + str(sell_price_dictionary[anchor_time]))
+
+                                    print("Total P&L: {:.2f}".format(total_pnl))
+                                    print("\n")
+
+                                    # time.sleep(0.3)
+                                else:
+                                    print("No signal found")
                             elif positions_dictionary[anchor_time] == "sell":
                                 if (sell_price_dictionary[anchor_time] - current_close_price) >= (
                                         profit_threshold * sell_price_dictionary[anchor_time]):
                                     # Buy when profit reaches 25%
+                                    print(anchors)
+                                    backtest_config.temp_plot_ohlcv_v2(strike_df_until_symbol_candle, anchor_time)
+
                                     positions_dictionary[anchor_time] = "buy"
                                     pnl = sell_price_dictionary[anchor_time] - current_close_price
                                     total_pnl += pnl
@@ -378,8 +452,15 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
                                     print("Date: " + str(strike_current_candle["datetime"]))
                                     print("Buy Price: " + str(current_close_price))
                                     print("P&L: {:.2f}".format(pnl))
+
+                                    print("Total P&L: {:.2f}".format(total_pnl))
+                                    print("\n")
+                                    # time.sleep(0.3)
                                 elif (sell_price_dictionary[anchor_time] - current_close_price) <= (
                                         loss_threshold * sell_price_dictionary[anchor_time]):
+                                    print(anchors)
+                                    backtest_config.temp_plot_ohlcv_v2(strike_df_until_symbol_candle, anchor_time)
+
                                     # Buy when loss reaches 25%
                                     positions_dictionary[anchor_time] = "buy"
                                     pnl = sell_price_dictionary[anchor_time] - current_close_price
@@ -388,6 +469,11 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
                                     print("Date: " + str(strike_current_candle["datetime"]))
                                     print("Buy Price: " + str(current_close_price))
                                     print("P&L: {:.2f}".format(pnl))
+
+                                    print("Total P&L: {:.2f}".format(total_pnl))
+                                    print("\n")
+
+                                    # time.sleep(0.3)
                                 elif (total_pnl + (sell_price_dictionary[anchor_time] - current_close_price)) <= -(
                                         stop_loss_percentage * amount_to_invest):
                                     # Exit position completely if total loss exceeds 1% of amount_to_invest
@@ -399,6 +485,13 @@ def advanced_backtesting_icici(from_date, to_date, time_interval, product_type, 
                                     print("Buy Price: " + str(current_close_price))
                                     print("P&L: {:.2f}".format(pnl))
                                     print("Stop Loss Hit. Total Loss: {:.2f}".format(total_pnl))
+                                else:
+                                    print("There already exists a position. But no buyback signal was found.")
+                                    print(
+                                        f"Selling price = {sell_price_dictionary[anchor_time]} , Current price = {current_close_price}")
+                                    print(
+                                        f"Profit/loss in this trade currently = {sell_price_dictionary[anchor_time] - current_close_price}")
+                                    print(f"time is {current_time}")
                             elif positions_dictionary[anchor_time] == "buy":
                                 # Check for take profit
                                 if total_pnl >= (profit_threshold * amount_to_invest):
@@ -588,6 +681,7 @@ def backtest_actual():
                     print("Buy Price: " + str(current_close_price))
                     print("P&L: {:.2f}".format(pnl))
                     print("Take Profit Hit. Total Profit: {:.2f}".format(total_pnl))
+            print("Total P&L: {:.2f}".format(total_pnl))
 
     for anchor_value, anchor_time in anchors:
         # Ensure the last position is a buy if not already
@@ -600,8 +694,6 @@ def backtest_actual():
             print("Buy Price: " + str(current_close_price))
             print("P&L: {:.2f}".format(pnl))
             print("End of Data. Total P&L: {:.2f}".format(total_pnl))
-
-    print("Total P&L: {:.2f}".format(total_pnl))
 
     ############################ Buy / sell code conditions ###########################
 
