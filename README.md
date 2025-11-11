@@ -15,9 +15,10 @@ Head and shoulder pattern detection algorithm:
 <img width="888" height="477" alt="image" src="https://github.com/user-attachments/assets/cfe50cff-03c4-4ba1-86e8-5a00eb358d39" />
 
 
-ICICI Direct auto data fetcher API
+ICICI Direct auto data fetcher API:
+
 <img width="598" height="799" alt="image" src="https://github.com/user-attachments/assets/03f055dd-d6a4-4a84-8454-0583429e8dae" />
 
-Auto Anchor Vwap using Local Minima Detection
+Auto Anchor Vwap using Local Minima Detection:
 <img width="668" height="537" alt="image" src="https://github.com/user-attachments/assets/cfa6d374-bc41-4664-88b5-98cea1e6671a" />
 
