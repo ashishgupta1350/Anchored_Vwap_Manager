@@ -22,3 +22,24 @@ ICICI Direct auto data fetcher API:
 Auto Anchor Vwap using Local Minima Detection:
 <img width="668" height="537" alt="image" src="https://github.com/user-attachments/assets/cfa6d374-bc41-4664-88b5-98cea1e6671a" />
 
+
+Sell Signal Generations at occurance of anchored vwaps on local minimas:
+<img width="536" height="535" alt="image" src="https://github.com/user-attachments/assets/954d3b27-0ae8-4b8c-b1b3-8b3db37e0254" />
+
+
+Failed Signals:
+
+<img width="591" height="549" alt="image" src="https://github.com/user-attachments/assets/72ea667c-67bb-4900-b72e-812f936d7abf" />
+
+Successful Signals:
+
+<img width="602" height="562" alt="image" src="https://github.com/user-attachments/assets/7f60a306-3aa7-40d9-b740-bae82ddb8491" />
+
+Auto Signals lead to auto profits:
+
+<img width="568" height="558" alt="image" src="https://github.com/user-attachments/assets/6779c1b0-f6f7-4bb6-95e2-446c92e05db5" />
+
+
+Signal Logs generated as part of backtesting framework:
+
+<img width="578" height="845" alt="image" src="https://github.com/user-attachments/assets/acf5db09-ab34-4d66-ba54-1769ac477e71" />
