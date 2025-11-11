@@ -43,3 +43,6 @@ Auto Signals lead to auto profits:
 Signal Logs generated as part of backtesting framework:
 
 <img width="578" height="845" alt="image" src="https://github.com/user-attachments/assets/acf5db09-ab34-4d66-ba54-1769ac477e71" />
+
+
+Note: The data can be found in Tester Part 1.ipynb and working of the code can be seen. This algorithm is inspired by AVWAP by Anirudh Singh and Myself Ashish Gupta 
